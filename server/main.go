@@ -1,80 +1,93 @@
 package main
 
 import (
-	"net"
-	"log"
 	"encoding/json"
-	"io"
 	"github.com/yanthems/anthem"
-
+	"log"
+	"net"
 )
 
+func main() {
 
+	originP := "9090"
+	targetP := "12345"
 
-func main(){
+	transP := "23333"
+	managerP := "23334"
 
-	originP:="9090"
-	targetP:="12345"
+	go listen(originP, originNetChan, "")
+	go listen(transP, transNetChan, "")
+	go listen(managerP, managerNetChan, "")
 
-	transP:="23333"
+	for {
+		conn := <-managerNetChan
 
-	go listen(originP,originNetChan,"")
-	go listen(transP,transNetChan,targetP)
+		go func(manager net.Conn) {
 
-	trans_con:=<-transNetChan
-	origin_con:=<-originNetChan
+			defer manager.Close()
 
-	//trans(trans_con,origin_con)
+			for {
 
-	anthem.SerToCli(origin_con,trans_con)
+				origin := <-originNetChan
+				if err := hello(manager, targetP); err != nil {
+					log.Println(err)
+
+					originNetChan <- origin
+					return
+				}
+				trans := <-transNetChan
+				go anthem.SerToCli(origin, trans)
+			}
+		}(conn)
+	}
+
 }
 
-func hello(conn net.Conn,target string){
-	hi:=map[string]interface{}{
-		"target":target,
+func hello(conn net.Conn, target string) error {
+	hi := anthem.Msg{
+		Port: target,
 	}
-	raw,err:=json.Marshal(hi)
-	if err!=nil{
+
+	raw, err := json.Marshal(hi)
+	if err != nil {
 		log.Println(err)
-		return
+		return err
 	}
-	log.Println(hi,"<===")
-	conn.Write(raw)
+	log.Println(hi, "<===")
+	_, err = conn.Write(raw)
+	if err != nil {
+		return err
+	}
+	return nil
 }
-var (
-	originNetChan = make(chan net.Conn,1024)
-	transNetChan = make(chan net.Conn,1024)
-)
-func listen(port string,netChan chan net.Conn,target string){
 
-	ser, err := net.Listen("tcp",net.JoinHostPort("127.0.0.1", port))
+var (
+	originNetChan  = make(chan net.Conn, 1024)
+	transNetChan   = make(chan net.Conn, 1024)
+	managerNetChan = make(chan net.Conn, 1024)
+)
+
+func listen(port string, netChan chan net.Conn, target string) {
+
+	ser, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", port))
 	if err != nil {
 		log.Println("server listen error")
 		return
 	}
 
-	go func(){
+	go func() {
 		for {
 			conn, err := ser.Accept()
 			if err != nil {
 				log.Println("server accept error")
 				return
 			}
-			if target!="" {
+			if target != "" {
 				hello(conn, target)
-			}else{
-				log.Println("new connection from",conn.RemoteAddr().String())
+			} else {
+				log.Println("new connection from", conn.RemoteAddr().String())
 			}
-			netChan<-conn
+			netChan <- conn
 		}
 	}()
-}
-
-func trans(trans_con,origin_con net.Conn){
-	defer trans_con.Close()
-	defer origin_con.Close()
-		log.Println("start translate")
-		go io.Copy(origin_con,trans_con)
-		io.Copy(trans_con,origin_con)
-		origin_con.Close()
 }

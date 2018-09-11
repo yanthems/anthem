@@ -1,85 +1,100 @@
 package main
 
 import (
-	"net"
-	"log"
-	"encoding/json"
-	"io"
 	"bytes"
+	"encoding/json"
 	"github.com/yanthems/anthem"
-	)
+	"log"
+	"net"
+)
 
+func main() {
 
-func main(){
-	transP:="23333"
-	transH:="127.0.0.1"
+	if !connect(RemoteHost, ManagerPort, managerNetChan) {
+		return
+	}
 
-	target:=hello(transH,transP)
+	go func() {
 
-	connect(target)
+		conn := <-managerNetChan
+		defer conn.Close()
 
-	trans_con:=<-transNetChan
-	target_con:=<-transNetChan
+		for {
 
-	log.Println(transP,"->",target)
-	//trans(trans_con,target_con)
+			raw := make([]byte, 256)
+			_, err := conn.Read(raw)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			raw = bytes.TrimRightFunc(raw, func(r rune) bool {
+				return r == '\x00'
+			})
+			hi := anthem.Msg{}
+			if err := json.Unmarshal(raw, &hi); err != nil {
+				log.Println(err)
+				return
+			}
 
-	anthem.SerToCli(trans_con,target_con)
+			go hello(hi.Port)
+
+		}
+
+	}()
+}
+
+type Trans struct {
+	Remote net.Conn
+	Local  net.Conn
 }
 
 var (
-	targetNetChan = make(chan net.Conn,1024)
-	transNetChan = make(chan net.Conn,1024)
+	targetNetChan  = make(chan net.Conn, 1024)
+	transNetChan   = make(chan net.Conn, 1024)
+	managerNetChan = make(chan net.Conn, 1024)
+
+	RemoteHost  = "127.0.0.1"
+	TransPort   = "23333"
+	ManagerPort = "23334"
+
+	LocalHost = "127.0.0.1"
 )
 
-func connect(port string){
-	local,err:=net.Dial("tcp",net.JoinHostPort("127.0.0.1",port))
-	if err!=nil{
+func connect(host, port string, netChan chan net.Conn) bool {
+	conn, err := net.Dial("tcp", net.JoinHostPort(host, port))
+	if err != nil {
 		log.Println(err)
-		return
+		return false
 	}
-	log.Println("connect to local",port)
-	transNetChan<-local
+	log.Println("connect to ", host, port)
+	netChan <- conn
+	return true
 }
-func hello(host,port string)string{
-		trans_ser, err := net.Dial("tcp", net.JoinHostPort(host, port))
-		if err != nil {
-			log.Println(err)
-			return ""
-		}
+func hello(port string) {
 
-		raw:=make([]byte,2048)
-		_,err= trans_ser.Read(raw)
-		if err!=nil{
-			log.Println(err)
-			return ""
-		}
-		raw=bytes.TrimRightFunc(raw, func(r rune) bool {
-			return r=='\x00'
-		})
+	log.Println("target port =", port, "<===")
 
-	hi:=map[string]interface{}{}
-		if err:=json.Unmarshal(raw,&hi);err!=nil{
-			log.Println(err)
-			return ""
-		}
-		if tp,exist:=hi["target"];exist{
-			if str,ok:=tp.(string);ok{
-				result:=str
-				log.Println("target =",result,"<===")
-				transNetChan<- trans_ser
-				return result
+	go func() {
+		for {
+			if connect(RemoteHost, TransPort, transNetChan) {
+				break
 			}
 		}
-		return ""
-}
+	}()
 
-func trans(trans_con,target_con net.Conn){
-	defer trans_con.Close()
-	defer target_con.Close()
-	for{
-		log.Println("start translate")
-		go io.Copy(trans_con,target_con)
-		io.Copy(target_con,trans_con)
-	}
+	go func() {
+
+		for {
+			if connect(LocalHost, port, targetNetChan) {
+				break
+			}
+		}
+
+	}()
+
+	trans := <-transNetChan
+	target := <-targetNetChan
+
+	anthem.SerToCli(trans, target)
+
 }
