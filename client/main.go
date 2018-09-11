@@ -104,6 +104,11 @@ func translate(port string) {
 	defer target.Close()
 
 	log.Println("start ",port)
-	anthem.SerToCli(trans, target)
+	if err:=anthem.SerToCli(trans, target);err!=nil{
+		log.Println(
+		trans.LocalAddr().String(),
+		target.LocalAddr().String(),
+		err)
+	}
 
 }

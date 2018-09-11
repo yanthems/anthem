@@ -37,7 +37,12 @@ func main() {
 				go func() {
 					defer origin.Close()
 					defer trans.Close()
-					anthem.SerToCli(origin, trans)
+					if err:=anthem.SerToCli(origin, trans);err!=nil{
+						log.Println(
+							origin.LocalAddr().String(),
+							trans.LocalAddr().String(),
+							err)
+					}
 				}()
 			}
 		}(conn)
