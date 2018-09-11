@@ -17,5 +17,5 @@ func SerToCli(ser, cli net.Conn) {
 }
 
 type Msg struct {
-	Port int `json:"port"`
+	Port string `json:"port"`
 }
