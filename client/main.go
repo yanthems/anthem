@@ -27,17 +27,12 @@ func main() {
 				log.Println(err)
 				return
 			}
-			raw = bytes.TrimRightFunc(raw, func(r rune) bool {
-				return r == '\x00'
-			})
-			//log.Println(raw)
-			hi := anthem.Msg{}
-			if err := json.Unmarshal(raw, &hi); err != nil {
-				log.Println(err)
+
+			hi,err:=handleMsg(raw)
+			if err!=nil{
 				return
 			}
-
-			go hello(hi.Port)
+			go translate(hi.Port)
 		}
 
 	}()
@@ -54,10 +49,10 @@ var (
 	managerNetChan = make(chan net.Conn, 1024)
 
 	RemoteHost  = "127.0.0.1"
+	LocalHost = "127.0.0.1"
+
 	TransPort   = "23333"
 	ManagerPort = "23334"
-
-	LocalHost = "127.0.0.1"
 )
 
 func connect(host, port string, netChan chan net.Conn) bool {
@@ -70,10 +65,21 @@ func connect(host, port string, netChan chan net.Conn) bool {
 	netChan <- conn
 	return true
 }
-func hello(port string) {
+func handleMsg(raw[]byte)(*anthem.Msg,error){
+	raw = bytes.TrimRightFunc(raw, func(r rune) bool {
+		return r == '\x00'
+	})
+	//log.Println(raw)
+	hi := anthem.Msg{}
+	if err := json.Unmarshal(raw, &hi); err != nil {
+		log.Println(err)
+		return nil,err
+	}
+	return &hi,nil
+}
+func translate(port string) {
 
 	log.Println("target port =", port, "<===")
-
 	go func() {
 		for {
 			if connect(RemoteHost, TransPort, transNetChan) {
@@ -84,18 +90,19 @@ func hello(port string) {
 	}()
 
 	go func() {
-
 		for {
 			if connect(LocalHost, port, targetNetChan) {
 				log.Println("connect local success")
 				break
 			}
 		}
-
 	}()
 
 	trans := <-transNetChan
+	defer trans.Close()
 	target := <-targetNetChan
+	defer target.Close()
+
 	log.Println("start ",port)
 	anthem.SerToCli(trans, target)
 

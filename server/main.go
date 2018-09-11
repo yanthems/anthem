@@ -15,6 +15,7 @@ func main() {
 	transP := "23333"
 	managerP := "23334"
 
+
 	go listen(originP, originNetChan)
 	go listen(transP, transNetChan)
 	go listen(managerP, managerNetChan)
@@ -32,10 +33,13 @@ func main() {
 					return
 				}
 				trans := <-transNetChan
-				go anthem.SerToCli(origin, trans)
-				log.Println("next")
+
+				go func() {
+					defer origin.Close()
+					defer trans.Close()
+					anthem.SerToCli(origin, trans)
+				}()
 			}
-			log.Println("???")
 		}(conn)
 	}
 }
@@ -44,7 +48,6 @@ func hello(conn net.Conn, target string) error {
 	hi := anthem.Msg{
 		Port: target,
 	}
-
 	raw, err := json.Marshal(hi)
 	if err != nil {
 		log.Println(err)

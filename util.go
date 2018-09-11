@@ -7,8 +7,6 @@ import (
 )
 
 func SerToCli(ser, cli net.Conn) {
-	defer ser.Close()
-	defer cli.Close()
 
 	log.Println("start translate")
 
@@ -17,5 +15,6 @@ func SerToCli(ser, cli net.Conn) {
 }
 
 type Msg struct {
+	Type string `json:"type"` // beats,msg,
 	Port string `json:"port"`
 }
