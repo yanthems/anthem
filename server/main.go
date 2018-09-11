@@ -15,32 +15,29 @@ func main() {
 	transP := "23333"
 	managerP := "23334"
 
-	go listen(originP, originNetChan, "")
-	go listen(transP, transNetChan, "")
-	go listen(managerP, managerNetChan, "")
+	go listen(originP, originNetChan)
+	go listen(transP, transNetChan)
+	go listen(managerP, managerNetChan)
 
 	for {
 		conn := <-managerNetChan
-
+		log.Println("get manager")
 		go func(manager net.Conn) {
-
 			defer manager.Close()
-
 			for {
-
 				origin := <-originNetChan
 				if err := hello(manager, targetP); err != nil {
 					log.Println(err)
-
 					originNetChan <- origin
 					return
 				}
 				trans := <-transNetChan
 				go anthem.SerToCli(origin, trans)
+				log.Println("next")
 			}
+			log.Println("???")
 		}(conn)
 	}
-
 }
 
 func hello(conn net.Conn, target string) error {
@@ -67,7 +64,7 @@ var (
 	managerNetChan = make(chan net.Conn, 1024)
 )
 
-func listen(port string, netChan chan net.Conn, target string) {
+func listen(port string, netChan chan net.Conn) {
 
 	ser, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", port))
 	if err != nil {
@@ -82,11 +79,7 @@ func listen(port string, netChan chan net.Conn, target string) {
 				log.Println("server accept error")
 				return
 			}
-			if target != "" {
-				hello(conn, target)
-			} else {
-				log.Println("new connection from", conn.RemoteAddr().String())
-			}
+			log.Println("new connection from", conn.RemoteAddr().String())
 			netChan <- conn
 		}
 	}()

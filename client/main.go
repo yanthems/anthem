@@ -14,13 +14,13 @@ func main() {
 		return
 	}
 
-	go func() {
+	func() {
 
 		conn := <-managerNetChan
 		defer conn.Close()
 
 		for {
-
+			//log.Println("start read")
 			raw := make([]byte, 256)
 			_, err := conn.Read(raw)
 			if err != nil {
@@ -30,6 +30,7 @@ func main() {
 			raw = bytes.TrimRightFunc(raw, func(r rune) bool {
 				return r == '\x00'
 			})
+			//log.Println(raw)
 			hi := anthem.Msg{}
 			if err := json.Unmarshal(raw, &hi); err != nil {
 				log.Println(err)
@@ -37,7 +38,6 @@ func main() {
 			}
 
 			go hello(hi.Port)
-
 		}
 
 	}()
@@ -77,6 +77,7 @@ func hello(port string) {
 	go func() {
 		for {
 			if connect(RemoteHost, TransPort, transNetChan) {
+				log.Println("connect trans success")
 				break
 			}
 		}
@@ -86,6 +87,7 @@ func hello(port string) {
 
 		for {
 			if connect(LocalHost, port, targetNetChan) {
+				log.Println("connect local success")
 				break
 			}
 		}
@@ -94,7 +96,7 @@ func hello(port string) {
 
 	trans := <-transNetChan
 	target := <-targetNetChan
-
+	log.Println("start ",port)
 	anthem.SerToCli(trans, target)
 
 }
